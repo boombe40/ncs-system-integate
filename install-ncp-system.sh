@@ -101,10 +101,6 @@ function get_openstack_information {
 
 function install_csi {
   cat > CSI-value.yaml << EOF
-csi:
-  plugin:
-    nodePlugin:
-      kubeletDir: /var/snap/microk8s/common/var/lib/kubelet
 storageClass:
   enabled: false
   delete:
@@ -152,7 +148,7 @@ secret:
   create: true
   name: cinder-csi-cloud-config
   data:
-    cloud-config: |-
+    cloud.conf: |-
       [Global]
       auth-url=https://cloud-api.nipa.cloud:5000
       region=NCP-TH
