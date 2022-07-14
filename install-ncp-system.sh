@@ -196,7 +196,7 @@ internal-lb=true
 create-monitor=true
 EOF
 
-cat > openstack-cloud-controller-manager-ds.yaml <<EOF
+  cat > openstack-cloud-controller-manager-ds.yaml <<EOF
 ---
 apiVersion: v1
 kind: ServiceAccount
