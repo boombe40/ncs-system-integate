@@ -89,7 +89,7 @@ EOF
 function create_application_credential {
 
   K8S_CLUSTERNAME=$(kubectl config current-context)
-  application_credential_name="kubernetes-$OS_PROJECTID-$K8S_CLUSTERNAME-$OS_PROJECTID-$K8S_CLUSTERNAME"
+  application_credential_name="kubernetes-$OS_PROJECTID-$K8S_CLUSTERNAME-cluster"
   echo -e "Create application credential name: $application_credential_name"
   if ! openstack application credential show $application_credential_name &> /dev/null; then
     echo -e "Delete old application credential name"
