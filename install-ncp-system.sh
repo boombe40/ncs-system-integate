@@ -32,7 +32,7 @@ function check_environment {
       mv ./kubectl /usr/local/bin/kubectl
   fi
 
-  if ! kubectl get node; then
+  if ! kubectl get node &> /dev/null; then
     echo 'Error! failed connect to kube-api'
     echo "Please create kubeconfig at /$MYUSER/.kube/config"
     exit 1;
