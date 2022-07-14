@@ -46,7 +46,7 @@ function check_environment {
 }
 
 function get_authen_openstack {
-  if [ -z $OS_USERNAME ] || [ -z $OS_PASSWORD ] || [ -z $OS_PROJECTID ]; then
+  if [ -z "$OS_USERNAME" ] || [ -z "$OS_PASSWORD" ] || [ -z "$OS_PROJECTID" ]; then
     echo '===== Gethering information ====='
     echo -e 'login space.nipa.cloud'
     echo -n 'Username: '
