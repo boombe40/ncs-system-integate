@@ -10,6 +10,8 @@ ENVPATH=/opt/osenv
 OS_PROJECTID=""
 OS_USERNAME=""
 OS_PASSWORD=""
+OS_ACCESS_ID=""
+OS_SECRET_KEY=""
 
 if [ ! -f $ENVPATH ]; then
   python3 -m venv /opt/osenv
@@ -84,6 +86,19 @@ EOF
     exit 1;
   fi
 }
+function create_application_credential {
+
+  K8S_CLUSTERNAME=$(kubectl config current-context)
+  application_credential_name="kubernetes-$OS_PROJECTID-$K8S_CLUSTERNAME-$OS_PROJECTID-$K8S_CLUSTERNAME"
+  echo -e "Create application credential name: $application_credential_name"
+  if ! openstack application credential show $application_credential_name &> /dev/null; then
+    echo -e "Delete old application credential name"
+    openstack application credential delete $application_credential_name
+  fi
+  credential=$(openstack application credential create kubernetes-$OS_PROJECTID-$K8S_CLUSTERNAME -f json)
+  OS_ACCESS_ID=$($credential | jq -r '.id')
+  OS_SECRET_KEY=$($credential | jq -r '.secret')
+}
 
 function get_openstack_information {
   source openrc.sh
@@ -152,11 +167,8 @@ secret:
       [Global]
       auth-url=https://cloud-api.nipa.cloud:5000
       region=NCP-TH
-      tenant-domain-name=nipacloud
-      tenant-id=$OS_PROJECTID
-      user-domain-name=nipacloud
-      username=$OS_USERNAME
-      password=$OS_PASSWORD
+      application-credential-id=$OS_ACCESS_ID
+      application-credential-secret=$OS_SECRET_KEY
 
 EOF
   helm repo add cpo https://kubernetes.github.io/cloud-provider-openstack
@@ -167,13 +179,9 @@ function install_ccm {
   cat > cloud.conf <<EOF
 [Global]
 auth-url=https://cloud-api.nipa.cloud:5000
-username=$OS_USERNAME
-password=$OS_PASSWORD
 region=NCP-TH
-domain-name=nipacloud
-tenant-id=$OS_PROJECTID
-tenant-domain-name=nipacloud
-user-domain-name=nipacloud
+application-credential-id=$OS_ACCESS_ID
+application-credential-secret=$OS_SECRET_KEY
 
 [LoadBalancer]
 use-octavia=true
@@ -186,7 +194,7 @@ internal-lb=true
 create-monitor=true
 EOF
 
-  cat > openstack-cloud-controller-manager-ds.yaml <<EOF
+cat > openstack-cloud-controller-manager-ds.yaml <<EOF
 ---
 apiVersion: v1
 kind: ServiceAccount
@@ -224,9 +232,6 @@ spec:
     metadata:
       labels:
         k8s-app: openstack-cloud-controller-manager
-    spec:
-      nodeSelector:
-        node-role.kubernetes.io/control-plane: ""
       securityContext:
         runAsUser: 1001
       tolerations:
@@ -235,7 +240,7 @@ spec:
         effect: NoSchedule
       - key: node-role.kubernetes.io/master
         effect: NoSchedule
-      - key: node-role.kubernetes.io/control-plane
+      - key: node-role.kubernetes.io/controlplane
         effect: NoSchedule
       serviceAccountName: cloud-controller-manager
       containers:
@@ -244,8 +249,8 @@ spec:
           args:
             - /bin/openstack-cloud-controller-manager
             - --v=1
-            - --cluster-name=$(CLUSTER_NAME)
-            - --cloud-config=$(CLOUD_CONFIG)
+            - --cluster-name=\$(CLUSTER_NAME)
+            - --cloud-config=\$(CLOUD_CONFIG)
             - --cloud-provider=openstack
             - --use-service-account-credentials=true
             - --bind-address=127.0.0.1
@@ -289,6 +294,7 @@ EOF
 check_environment
 get_authen_openstack
 login_openstack
+create_application_credential
 get_openstack_information
 install_csi
 install_ccm
