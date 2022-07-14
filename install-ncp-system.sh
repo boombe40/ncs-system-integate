@@ -204,19 +204,6 @@ metadata:
   name: cloud-controller-manager
   namespace: ncs-system
 ---
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRoleBinding
-metadata:
-  name: system:cloud-controller-manager
-roleRef:
-  apiGroup: rbac.authorization.k8s.io
-  kind: ClusterRole
-  name: cluster-admin
-subjects:
-- kind: ServiceAccount
-  name: cloud-controller-manager
-  namespace: ncs-system
----
 apiVersion: apps/v1
 kind: DaemonSet
 metadata:
@@ -234,6 +221,9 @@ spec:
     metadata:
       labels:
         k8s-app: openstack-cloud-controller-manager
+    spec:
+      nodeSelector:
+        node-role.kubernetes.io/control-plane: ""
       securityContext:
         runAsUser: 1001
       tolerations:
@@ -251,8 +241,8 @@ spec:
           args:
             - /bin/openstack-cloud-controller-manager
             - --v=1
-            - --cluster-name=\$(CLUSTER_NAME)
-            - --cloud-config=\$(CLOUD_CONFIG)
+            - --cluster-name=$(CLUSTER_NAME)
+            - --cloud-config=$(CLOUD_CONFIG)
             - --cloud-provider=openstack
             - --use-service-account-credentials=true
             - --bind-address=127.0.0.1
