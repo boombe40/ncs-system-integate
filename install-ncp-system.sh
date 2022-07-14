@@ -10,6 +10,8 @@ ENVPATH=/opt/osenv
 OS_PROJECTID=""
 OS_USERNAME=""
 OS_PASSWORD=""
+OS_ACCESS_ID=""
+OS_SECRET_KEY=""
 
 if [ ! -f $ENVPATH ]; then
   python3 -m venv /opt/osenv
@@ -30,7 +32,7 @@ function check_environment {
       mv ./kubectl /usr/local/bin/kubectl
   fi
 
-  if ! kubectl get node; then
+  if ! kubectl get node &> /dev/null; then
     echo 'Error! failed connect to kube-api'
     echo "Please create kubeconfig at /$MYUSER/.kube/config"
     exit 1;
@@ -44,7 +46,7 @@ function check_environment {
 }
 
 function get_authen_openstack {
-  if [[ -z $OS_USERNAME || -z $OS_PASSWORD || -z $OS_PROJECTID ]]; then
+  if [ -z "$OS_USERNAME" ] || [ -z "$OS_PASSWORD" ] || [ -z "$OS_PROJECTID" ]; then
     echo '===== Gethering information ====='
     echo -e 'login space.nipa.cloud'
     echo -n 'Username: '
@@ -83,6 +85,21 @@ EOF
     unset OS_PROJECTID
     exit 1;
   fi
+}
+function create_application_credential {
+
+  K8S_CLUSTERNAME=$(kubectl config current-context)
+  application_credential_name="kubernetes-$OS_PROJECTID-$K8S_CLUSTERNAME-cluster"
+  openstack application credential show $application_credential_name &> /dev/null
+  RESULT=$?
+  if [ $RESULT -eq 0 ]; then
+    echo -e "Delete old application credential name: $application_credential_name"
+    openstack application credential delete $application_credential_name
+  fi
+  echo -e "Create new application credential name: $application_credential_name"
+  credential=$(openstack application credential create $application_credential_name -f json)
+  OS_ACCESS_ID=$(echo $credential | jq -r '.id')
+  OS_SECRET_KEY=$(echo $credential | jq -r '.secret')
 }
 
 function get_openstack_information {
@@ -152,11 +169,8 @@ secret:
       [Global]
       auth-url=https://cloud-api.nipa.cloud:5000
       region=NCP-TH
-      tenant-domain-name=nipacloud
-      tenant-id=$OS_PROJECTID
-      user-domain-name=nipacloud
-      username=$OS_USERNAME
-      password=$OS_PASSWORD
+      application-credential-id=$OS_ACCESS_ID
+      application-credential-secret=$OS_SECRET_KEY
 
 EOF
   helm repo add cpo https://kubernetes.github.io/cloud-provider-openstack
@@ -167,13 +181,9 @@ function install_ccm {
   cat > cloud.conf <<EOF
 [Global]
 auth-url=https://cloud-api.nipa.cloud:5000
-username=$OS_USERNAME
-password=$OS_PASSWORD
 region=NCP-TH
-domain-name=nipacloud
-tenant-id=$OS_PROJECTID
-tenant-domain-name=nipacloud
-user-domain-name=nipacloud
+application-credential-id=$OS_ACCESS_ID
+application-credential-secret=$OS_SECRET_KEY
 
 [LoadBalancer]
 use-octavia=true
@@ -191,19 +201,6 @@ EOF
 apiVersion: v1
 kind: ServiceAccount
 metadata:
-  name: cloud-controller-manager
-  namespace: ncs-system
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRoleBinding
-metadata:
-  name: system:cloud-controller-manager
-roleRef:
-  apiGroup: rbac.authorization.k8s.io
-  kind: ClusterRole
-  name: cluster-admin
-subjects:
-- kind: ServiceAccount
   name: cloud-controller-manager
   namespace: ncs-system
 ---
@@ -225,8 +222,6 @@ spec:
       labels:
         k8s-app: openstack-cloud-controller-manager
     spec:
-      nodeSelector:
-        node-role.kubernetes.io/control-plane: ""
       securityContext:
         runAsUser: 1001
       tolerations:
@@ -235,7 +230,7 @@ spec:
         effect: NoSchedule
       - key: node-role.kubernetes.io/master
         effect: NoSchedule
-      - key: node-role.kubernetes.io/control-plane
+      - key: node-role.kubernetes.io/controlplane
         effect: NoSchedule
       serviceAccountName: cloud-controller-manager
       containers:
@@ -244,8 +239,8 @@ spec:
           args:
             - /bin/openstack-cloud-controller-manager
             - --v=1
-            - --cluster-name=$(CLUSTER_NAME)
-            - --cloud-config=$(CLOUD_CONFIG)
+            - --cluster-name=\$(CLUSTER_NAME)
+            - --cloud-config=\$(CLOUD_CONFIG)
             - --cloud-provider=openstack
             - --use-service-account-credentials=true
             - --bind-address=127.0.0.1
@@ -289,6 +284,7 @@ EOF
 check_environment
 get_authen_openstack
 login_openstack
+create_application_credential
 get_openstack_information
 install_csi
 install_ccm

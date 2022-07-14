@@ -6,7 +6,8 @@
 
 2. install by curl.
 ```
-curl -sSL https://raw.githubusercontent.com/boombe40/ncs-system-integrate/main/install-ncp-system.sh | bash
+wget https://raw.githubusercontent.com/boombe40/ncs-system-integrate/main/install-ncp-system.sh -O install-ncp-system.sh
+bash ./install-npc-system.sh
 ```
 
 3. input your credential and configure option.
