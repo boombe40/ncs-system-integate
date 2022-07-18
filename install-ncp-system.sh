@@ -196,89 +196,11 @@ internal-lb=true
 create-monitor=true
 EOF
 
-  cat > openstack-cloud-controller-manager-ds.yaml <<EOF
----
-apiVersion: v1
-kind: ServiceAccount
-metadata:
-  name: cloud-controller-manager
-  namespace: ncs-system
----
-apiVersion: apps/v1
-kind: DaemonSet
-metadata:
-  name: openstack-cloud-controller-manager
-  namespace: ncs-system
-  labels:
-    k8s-app: openstack-cloud-controller-manager
-spec:
-  selector:
-    matchLabels:
-      k8s-app: openstack-cloud-controller-manager
-  updateStrategy:
-    type: RollingUpdate
-  template:
-    metadata:
-      labels:
-        k8s-app: openstack-cloud-controller-manager
-    spec:
-      securityContext:
-        runAsUser: 1001
-      tolerations:
-      - key: node.cloudprovider.kubernetes.io/uninitialized
-        value: "true"
-        effect: NoSchedule
-      - key: node-role.kubernetes.io/master
-        effect: NoSchedule
-      - key: node-role.kubernetes.io/controlplane
-        effect: NoSchedule
-      serviceAccountName: cloud-controller-manager
-      containers:
-        - name: openstack-cloud-controller-manager
-          image: docker.io/k8scloudprovider/openstack-cloud-controller-manager:latest
-          args:
-            - /bin/openstack-cloud-controller-manager
-            - --v=1
-            - --cluster-name=\$(CLUSTER_NAME)
-            - --cloud-config=\$(CLOUD_CONFIG)
-            - --cloud-provider=openstack
-            - --use-service-account-credentials=true
-            - --bind-address=127.0.0.1
-          volumeMounts:
-            - mountPath: /etc/kubernetes/pki
-              name: k8s-certs
-              readOnly: true
-            - mountPath: /etc/ssl/certs
-              name: ca-certs
-              readOnly: true
-            - mountPath: /etc/config
-              name: cloud-config-volume
-              readOnly: true
-          resources:
-            requests:
-              cpu: 200m
-          env:
-            - name: CLOUD_CONFIG
-              value: /etc/config/cloud.conf
-            - name: CLUSTER_NAME
-              value: kubernetes
-      hostNetwork: true
-      volumes:
-      - hostPath:
-          path: /etc/kubernetes/pki
-          type: DirectoryOrCreate
-        name: k8s-certs
-      - hostPath:
-          path: /etc/ssl/certs
-          type: DirectoryOrCreate
-        name: ca-certs
-      - name: cloud-config-volume
-        secret:
-          secretName: cloud-config
-EOF
-
   kubectl create secret -n ncs-system generic cloud-config --from-file=cloud.conf
-  kubectl apply -f ./openstack-cloud-controller-manager-ds.yaml
+  kubectl apply -f https://raw.githubusercontent.com/boombe40/ncs-system-integrate/main/src/controller-manager/cluster-role.yaml
+  kubectl apply -f https://raw.githubusercontent.com/boombe40/ncs-system-integrate/main/src/controller-manager/cluster-role-binding.yaml
+  kubectl apply -f https://raw.githubusercontent.com/boombe40/ncs-system-integrate/main/src/controller-manager/deamonset.yaml
+
 }
 
 check_environment
@@ -288,3 +210,4 @@ create_application_credential
 get_openstack_information
 install_csi
 install_ccm
+
