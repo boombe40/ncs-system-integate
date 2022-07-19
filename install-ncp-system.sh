@@ -175,6 +175,12 @@ secret:
 EOF
   helm repo add cpo https://kubernetes.github.io/cloud-provider-openstack
   helm repo update
+
+  helm ls -n ncs-system | grep cinder-csi
+  result=$?
+  if [ $result -eq 0 ]; then  
+    helm delete --namespace ncs-system cinder-csi 
+  fi
   helm install cinder-csi cpo/openstack-cinder-csi -f ./CSI-value.yaml --namespace ncs-system --create-namespace
 }
 function install_ccm {
@@ -195,7 +201,11 @@ flavor-id=$OS_Loadbalancer_id
 internal-lb=true
 create-monitor=true
 EOF
-
+  kubectl get secret -n ncs-system cloud-config > /dev/null 2&>1
+  RESULT=$?
+  if [ $RESULT -eq 0 ]; then
+    kubectl delete secret -n ncs-system cloud-config
+  fi
   kubectl create secret -n ncs-system generic cloud-config --from-file=cloud.conf
   kubectl apply -f https://raw.githubusercontent.com/boombe40/ncs-system-integrate/main/src/controller-manager/cluster-role.yaml
   kubectl apply -f https://raw.githubusercontent.com/boombe40/ncs-system-integrate/main/src/controller-manager/cluster-role-binding.yaml
